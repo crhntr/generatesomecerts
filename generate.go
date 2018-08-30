@@ -1,4 +1,4 @@
-package gimmecerts
+package generatesomecerts
 
 import (
 	"crypto/ecdsa"
@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func Pems(hosts ...string) (caCert []byte, signedCerts [][]byte) {
+func Certs(hosts ...string) (caCert []byte, signedCerts [][]byte) {
 	caPriv, err := rsa.GenerateKey(rand.Reader, 512)
 
 	notBefore := time.Now()
@@ -48,7 +48,7 @@ func Pems(hosts ...string) (caCert []byte, signedCerts [][]byte) {
 		log.Fatalf("Failed to create certificate: %s", err)
 	}
 
-	certs := make([][]byte, len(hosts))
+	certs := make([][]byte, 0, len(hosts))
 
 	for _, certHosts := range hosts {
 		template := x509.Certificate{
