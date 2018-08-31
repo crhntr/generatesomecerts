@@ -12,11 +12,15 @@ import (
 	"math/big"
 	"net"
 	"os"
-	"strings"
 	"time"
 )
 
-func Certs(hosts ...string) (caCert []byte, signedCerts [][]byte) {
+type KeyPair struct {
+	PublicKey  []byte
+	PrivateKey []byte
+}
+
+func CACert(hosts ...string) (private, public *pem.Block) {
 	caPriv, err := rsa.GenerateKey(rand.Reader, 512)
 
 	notBefore := time.Now()
@@ -48,42 +52,40 @@ func Certs(hosts ...string) (caCert []byte, signedCerts [][]byte) {
 		log.Fatalf("Failed to create certificate: %s", err)
 	}
 
-	certs := make([][]byte, 0, len(hosts))
+	return &pem.Block{Type: "CERTIFICATE", Bytes: caCert}, 
 
-	for _, certHosts := range hosts {
-		template := x509.Certificate{
-			IsCA:         false,
-			SerialNumber: serialNumber,
-			Subject: pkix.Name{
-				Organization: []string{"Acme Co"},
-			},
-			NotBefore: notBefore,
-			NotAfter:  notAfter,
+}
 
-			KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-			ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-			BasicConstraintsValid: true,
-		}
+func SignedCert(ca []byte, hosts ...string) (private, public *pem.Block) {
+	template := x509.Certificate{
+		IsCA:         false,
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Acme Co"},
+		},
+		NotBefore: notBefore,
+		NotAfter:  notAfter,
 
-		hs := strings.Split(certHosts, ",")
-		for _, h := range hs {
-			if ip := net.ParseIP(h); ip != nil {
-				template.IPAddresses = append(template.IPAddresses, ip)
-			} else {
-				template.DNSNames = append(template.DNSNames, h)
-			}
-		}
-
-		priv, err := rsa.GenerateKey(rand.Reader, 512)
-		cert, err := x509.CreateCertificate(rand.Reader, &template, &caTemplate, priv.Public(), priv)
-		if err != nil {
-			log.Fatalf("Failed to create certificate: %s", err)
-		}
-
-		certs = append(certs, cert)
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
 	}
 
-	return ca, certs
+	for _, h := range hosts {
+		if ip := net.ParseIP(h); ip != nil {
+			template.IPAddresses = append(template.IPAddresses, ip)
+		} else {
+			template.DNSNames = append(template.DNSNames, h)
+		}
+	}
+
+	priv, err := rsa.GenerateKey(rand.Reader, 512)
+	cert, err := x509.CreateCertificate(rand.Reader, &template, &caTemplate, priv.Public(), priv)
+	if err != nil {
+		log.Fatalf("Failed to create certificate: %s", err)
+	}
+
+	//	return ca, certs
 }
 
 func pemBlockForKey(priv interface{}) *pem.Block {

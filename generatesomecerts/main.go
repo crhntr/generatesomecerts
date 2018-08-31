@@ -15,7 +15,7 @@ func main() {
 	caCert, signedCerts := generatesomecerts.Certs(flag.Args()...)
 
 	fmt.Println("ca-cert:")
-	pem.Encode(os.Stdout, &pem.Block{Type: "CERTIFICATE", Bytes: caCert})
+	pem.Encode(os.Stdout)
 	for i, cert := range signedCerts {
 		fmt.Printf("\n\ncert signed for %q:\n", flag.Args()[i])
 		pem.Encode(os.Stdout, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
