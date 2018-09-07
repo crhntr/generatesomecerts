@@ -13,6 +13,7 @@ import (
 )
 
 var OrgName = "Acme Co"
+var KeySize = 512
 
 type Cert struct {
 	Template   *x509.Certificate
@@ -25,7 +26,7 @@ func (cert Cert) String() string {
 }
 
 func CA() (Cert, error) {
-	caPriv, err := rsa.GenerateKey(rand.Reader, 512)
+	caPriv, err := rsa.GenerateKey(rand.Reader, KeySize)
 
 	notBefore := time.Now()
 	notAfter := notBefore.Add(time.Hour * 24 * 10000) // nearly 30 years
@@ -63,7 +64,7 @@ func (ca Cert) SignedCert(hosts ...string) (Cert, error) {
 	var cert Cert
 	var certTemplate *x509.Certificate
 
-	priv, err := rsa.GenerateKey(rand.Reader, 512)
+	priv, err := rsa.GenerateKey(rand.Reader, KeySize)
 
 	notBefore := time.Now()
 	notAfter := notBefore.Add(time.Hour * 24 * 10000) // nearly 30 years
