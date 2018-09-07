@@ -25,6 +25,6 @@ func main() {
 			println(err)
 			return
 		}
-		fmt.Printf("\n----> signed-cert\n\n%s\n", cert)
+		fmt.Printf("\n----> signed-cert\n      %v\n\n%s\n", hs, cert)
 	}
 }
