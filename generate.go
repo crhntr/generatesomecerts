@@ -8,19 +8,27 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"os"
 	"time"
 )
 
-type KeyPair struct {
-	PublicKey  []byte
-	PrivateKey []byte
+var OrgName = "Acme Co"
+
+type Cert struct {
+	Template   *x509.Certificate
+	DER        []byte // DER encoded
+	PrivateKey *rsa.PrivateKey
 }
 
-func CACert(hosts ...string) (private, public *pem.Block) {
+func (cert Cert) String() string {
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.DER}))
+}
+
+func CA() (Cert, error) {
+	var cert *x509.Certificate
+
 	caPriv, err := rsa.GenerateKey(rand.Reader, 512)
 
 	notBefore := time.Now()
@@ -29,14 +37,14 @@ func CACert(hosts ...string) (private, public *pem.Block) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		log.Fatalf("failed to generate serial number: %s", err)
+		return Cert{}, fmt.Errorf("failed to generate serial number: %s", err)
 	}
 
 	caTemplate := x509.Certificate{
 		IsCA:         true,
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Acme Co"},
+			Organization: []string{OrgName},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -47,21 +55,33 @@ func CACert(hosts ...string) (private, public *pem.Block) {
 	}
 	caTemplate.KeyUsage |= x509.KeyUsageCertSign
 
-	ca, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, caPriv.Public(), caPriv)
+	certBytes, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, caPriv.Public(), caPriv)
 	if err != nil {
-		log.Fatalf("Failed to create certificate: %s", err)
+		return Cert{}, fmt.Errorf("Failed to create certificate: %s", err)
 	}
 
-	return &pem.Block{Type: "CERTIFICATE", Bytes: caCert}, 
-
+	return Cert{cert, certBytes, caPriv}, nil
 }
 
-func SignedCert(ca []byte, hosts ...string) (private, public *pem.Block) {
+func (ca Cert) SignedCert(hosts ...string) (Cert, error) {
+	var cert Cert
+	var certTemplate *x509.Certificate
+
+	priv, err := rsa.GenerateKey(rand.Reader, 512)
+
+	notBefore := time.Now()
+	notAfter := notBefore.Add(time.Hour * 24 * 10000) // nearly 30 years
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return cert, fmt.Errorf("failed to generate serial number: %s", err)
+	}
+
 	template := x509.Certificate{
-		IsCA:         false,
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Acme Co"},
+			Organization: []string{OrgName},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -70,6 +90,7 @@ func SignedCert(ca []byte, hosts ...string) (private, public *pem.Block) {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
+	template.KeyUsage |= x509.KeyUsageCertSign // not sure if correct?
 
 	for _, h := range hosts {
 		if ip := net.ParseIP(h); ip != nil {
@@ -79,13 +100,12 @@ func SignedCert(ca []byte, hosts ...string) (private, public *pem.Block) {
 		}
 	}
 
-	priv, err := rsa.GenerateKey(rand.Reader, 512)
-	cert, err := x509.CreateCertificate(rand.Reader, &template, &caTemplate, priv.Public(), priv)
+	certBytes, err := x509.CreateCertificate(rand.Reader, &template, ca.Template, priv.Public(), ca.PrivateKey)
 	if err != nil {
-		log.Fatalf("Failed to create certificate: %s", err)
+		return cert, fmt.Errorf("Failed to create certificate: %s", err)
 	}
 
-	//	return ca, certs
+	return Cert{certTemplate, certBytes, priv}, nil
 }
 
 func pemBlockForKey(priv interface{}) *pem.Block {

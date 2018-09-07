@@ -1,10 +1,9 @@
 package main
 
 import (
-	"encoding/pem"
 	"flag"
 	"fmt"
-	"os"
+	"strings"
 
 	"github.com/crhntr/generatesomecerts"
 )
@@ -12,12 +11,20 @@ import (
 func main() {
 	flag.Parse()
 
-	caCert, signedCerts := generatesomecerts.Certs(flag.Args()...)
+	ca, err := generatesomecerts.CA()
+	if err != nil {
+		println(err)
+		return
+	}
+	fmt.Printf("\n----> ca-cert\n\n%s\n", ca)
 
-	fmt.Println("ca-cert:")
-	pem.Encode(os.Stdout)
-	for i, cert := range signedCerts {
-		fmt.Printf("\n\ncert signed for %q:\n", flag.Args()[i])
-		pem.Encode(os.Stdout, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	for _, hosts := range flag.Args() {
+		hs := strings.Split(hosts, ",")
+		cert, err := ca.SignedCert(hs...)
+		if err != nil {
+			println(err)
+			return
+		}
+		fmt.Printf("\n----> signed-cert\n\n%s\n", cert)
 	}
 }
